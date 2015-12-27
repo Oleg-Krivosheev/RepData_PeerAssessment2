@@ -6,34 +6,40 @@ output:
     keep_md: true
 ---
 
-Severe Weather Events Impact on population health and Economy,
-         Analysis Report
-=================
+# Severe Weather Events Impact on Population Health and Economy
 
 ## Synopsis
 
-In this report we aim to answer some basic questions about severe weather events.
-Specifically, we try to identify which types of events are the most harmful to population
-health and the most deleterious to the economy.
-To answer these questions, we obtained the storm database from the U.S. National Oceanic and Atmospheric Administration's (NOAA).
-This database tracks characteristics of major storms and weather events in the United States, including estimates of any fatalities,
-injuries, and property and crop damage. From these data, we found that tornadoes and heat are the severe weather event types
-by far most dangerous to people, while flooding, hurricanes, and storm surges are the most costly event types to the economy.
-Interestingly, only flooding is one of the top three most dangerous or most costly event types.
+The United States National Oceanic and Atmospheric Administration's (NOAA) (storm database)
+[https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2]
+was used to answer some basic questions about severe weather events
+statistics. We identified which types of events are the most harmful to population
+health and the most deleterious to the economy. The NOAA's database tracks characteristics of major
+storms and weather events in the United States,
+including estimates of any fatalities, injuries, and property and material damage.
+
+From NOAA's data, we would aggregated economy and public health damages by event type and
+found that tornadoes and heat are the severe weather event types by far most dangerous to people.
+We found out that with regards to the economical damage, flooding, hurricanes, and storm surges are
+the most costly types of events.
 
 ## Prerequisites
 
-This report was produced using following packages
+This report was produced using following software:
 
- - **R** version 3.2.3, 64bit, running under Windows operating system, taken from [.](https://cran.r-project.org/bin/windows/base/)
+ - **R** version 3.2.3, 64bit, running under Windows operating system, taken from [R project](https://cran.r-project.org/bin/windows/base/).
  - **data.table** version 1.9.6 from [data table](https://cran.r-project.org/web/packages/data.table/index.html).
- - **ggplot2** as found in **R** installation
- - **xtable**
+ - **ggplot2** as found in the **R** installation.
+ - **xtable** as loaded from [there](https://cran.r-project.org/web/packages/xtable/index.html).
+ - **R Studio** v0.99.489 from [R studio](https://www.rstudio.com/products/rstudio/download/).
+ - **7 zip** v15.12, 64bit, from Igor Pavlov [page](http://www.7-zip.org/).
 
 ## Data Processing
 
+### Load required **R** packages
 
-### Loading required **R** packages
+We are using **R** packages such as  **data.table**, **xtable** and **ggplot2**. First, we ensure
+packages are installed and loaded.
 
 ```{r, echo=TRUE}
 check_and_install <- function( packname ) {
@@ -53,14 +59,196 @@ require("xtable")
 require("ggplot2")
 ```
 
-### Reading and Analysing Data
+### Download and Prepare Data
+
+First, we download all relevant data, including CSV table itself together with documentation and FAQ.
 
 ```{r, echo=TRUE}
+
+fname.data <- "repdata-data-StormData.csv.bz2"
+url.data <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+#download.file(url.data, destfile = fname.data, mode = "wb")
+
+fname.docs <- "repdata-data-StormDocs.pdf"
+url.docs <- "https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf"
+#download.file(url.docs, destfile = fname.docs, mode = "wb")
+
+fname.faq <- "repdata-data-StormFAQ.pdf"
+url.faq <- "https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf"
+#download.file(url.faq, destfile = fname.faq, mode = "wb")
 ```
 
+Storm database shall be uncompressed.
 
+```{r, echo=TRUE}
+# extractor from Igor Pavlov's 7zip
+sevenzip <- "\"C:/Program Files/7-Zip/7z.exe\""
+# always overwrite on extract
+cmd <- paste(sevenzip, " ", "x", " ", "-aoa", " ", fname.data)
+# try( system(cmd) )
+```
 
+### Load data base
 
-## Assignment
+The data file is now in the working directory, and in well-known CSV format.
+Read it directly as **data.table**, with some checks
+
+```{r, echo=TRUE}
+# suppressMessages( sd <- fread("repdata-data-StormData.csv", showProgress = FALSE) )
+# str(sd)
+```
+
+### Data clean-up
+
+First, we would like to coerce *F* to *integer*.
+
+```{r, echo=TRUE}
+load("sd.rda")
+#sd <- sd[, F := as.integer(F)]
+str(sd)
+```
+
+Second, *BGN_DATE* to be converted to a proper *Date* class type.
+
+```{r, echo=TRUE}
+#sd <- sd [, BGN_DATE := as.Date(BGN_DATE, format="%m/%d/%Y %H:%M:%S")]
+str(sd)
+```
+
+### Years range restriction
+
+We check how many events are per year total
+
+```{r, echo=TRUE}
+sd <- sd[, Year := as.POSIXlt(BGN_DATE)$year + 1900]
+str(sd)
+sd.per_year <- sd[, .N, by = Year]
+str(sd.per_year)
+p <- ggplot(sd.per_year) + geom_line(aes(Year, N))
+print(p)
+```
+
+### Economy damage data adjustment
+
+Property damage and crop damage shall be converted into proper numerical form, based upon the
+codes described in the code book. Property and crop damages in original data table are expressed in the
+different scales using letter codes. Conversion rule is as following.
+
+- If PROPDMGEXP = B, then multiply PROPDMG by 1,000,000,000
+- If PROPDMGEXP = M, then multiply PROPDMG by 1,000,000
+- If PROPDMGEXP = K, then multiply PROPDMG by 1,000
+- If PROPDMGEXP = H, then multiply PROPDMG by 100
+- Otherwise leave PROPDMG as-is
+
+Lets check how many NAs are present for property damage data,
+and get the number of entries grouped by damage exponent letter code:
+
+```{r, echo=TRUE}
+na.PROPDMG <- sum(is.na(sd$PROPDMGEXP))
+na.PROPDMGEXP <- sum(is.na(sd$PROPDMGEXP))
+```
+
+So far we have `r na.PROPDMG` items with NA for property damage, and
+`r na.PROPDMGEXP` items with NA for property damage exponential letter code.
+
+Lets print the number of appearances of property damage codes in descending order.
+
+```{r, echo=TRUE}
+q <- setorder( sd[, .N, by = PROPDMGEXP], -N)
+print(q)
+```
+
+Same rules applies to the crop damage:
+
+- If CROPDMGEXP = B, then multiply CROPDMG by 1,000,000,000
+- If CROPDMGEXP = M, then multiply CROPDMG by 1,000,000
+- If CROPDMGEXP = K, then multiply CROPDMG by 1,000
+- If CROPDMGEXP = H, then multiply CROPDMG by 100
+- Otherwise leave CROPDMG as-is
+
+Check crop damage NA items as well
+
+```{r, echo=TRUE}
+na.CROPDMG <- sum(is.na(sd$CROPDMGEXP))
+na.CROPDMGEXP <- sum(is.na(sd$CROPDMGEXP))
+```
+
+So far we have `r na.CROPDMG` items with NA for crop damage, and
+`r na.CROPDMGEXP` items with NA for crop damage exponential letter code.
+
+Lets print the number of appearances of crop damage codes in descending order.
+
+```{r, echo=TRUE}
+print( sum( is.na(sd$CROPDMGEXP) ) )
+q <- setorder( sd[, .N, by = CROPDMGEXP], -N)
+print(q)
+```
+
+We shall define function (below) which will convert damage
+exponent letter code into the damage multiplier.
+
+```{r, echo=TRUE}
+damage_scale <- function( dmg_code ) {
+    #print(dmg_code)
+    if ((toupper(dmg_code) == "B")[1]) {
+        return( 1.0e9 )
+    }
+    if ((toupper(dmg_code) == "M")[1]) {
+        return( 1.0e6 )
+    }
+    if ((toupper(dmg_code) == "K")[1]) {
+        return( 1000.0 )
+    }
+    if ((toupper(dmg_code) == "H")[1]) {
+        return( 100.0 )
+    }
+
+    1.0
+}
+```
+
+Now, having such function defined, we rescale property damage
+
+```{r, echo=TRUE}
+sd <- sd[, PROPDMG := PROPDMG * damage_scale(PROPDMGEXP)]
+```
+
+and crop damage as well
+
+```{r, echo=TRUE}
+sd <- sd[, CROPDMG := CROPDMG * damage_scale(CROPDMGEXP)]
+```
+
+### Events grouping
+
+```{r, echo=TRUE}
+q <- setorder( sd[, .N, by=sd$EVTYPE], -N )
+str(q)
+```
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("TSTM WIND",
+                                      " TSTM WIND",
+                                      "SEVERE THUNDERSTORM WINDS",
+                                      "THUNDERSTORM WIND",
+                                      "THUNDERSTORM WINDS"), "TDSTM WINDS", EVTYPE )]
+```
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("TSTM WIND",
+                                      " TSTM WIND",
+                                      "SEVERE THUNDERSTORM WINDS",
+                                      "THUNDERSTORM WIND",
+                                      "THUNDERSTORM WINDS"), "TDSTM WINDS", EVTYPE )]
+```
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("HURRICANE/TYPHOON",
+                                              "HURRICANE EMILY",
+                                              "HURRICANE ERIN",
+                                              "HURRICANE OPAL",
+                                              "HURRICANE OPAL/HIGH WINDS",
+                                              "TYPHOON"), "HURRICANE", EVTYPE )]
+```
 
 ## Results
