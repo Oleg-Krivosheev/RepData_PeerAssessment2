@@ -23,3 +23,8 @@ vignettes/*.pdf
 
 # PDF docs
 *.pdf
+
+# CSV, compressed CSV
+*.csv
+*.csv.bz2
+*.csv.zip
