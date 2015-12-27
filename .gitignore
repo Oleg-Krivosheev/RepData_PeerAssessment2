@@ -28,3 +28,6 @@ vignettes/*.pdf
 *.csv
 *.csv.bz2
 *.csv.zip
+
+# Temporary files after knittr run
+*.html
