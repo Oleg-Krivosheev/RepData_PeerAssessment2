@@ -10,26 +10,28 @@ output:
 
 ## Synopsis
 
-The United States National Oceanic and Atmospheric Administration's (NOAA) (storm database)
-[https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2]
+The United States National Oceanic and Atmospheric Administration's (NOAA) [storm database]
+(https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)
 was used to answer some basic questions about severe weather events
 statistics. We identified which types of events are the most harmful to population
-health and the most deleterious to the economy. The NOAA's database tracks characteristics of major
-storms and weather events in the United States,
-including estimates of any fatalities, injuries, and property and material damage.
+health and the most dangerous to the economy. The NOAA's database tracks
+characteristics of major storms and weather events in the United States,
+including estimates of any fatalities, injuries, and property and crop damage.
 
-From NOAA's data, we would aggregated economy and public health damages by event type and
-found that tornadoes and heat are the severe weather event types by far most dangerous to people.
-We found out that with regards to the economical damage, flooding, hurricanes, and storm surges are
-the most costly types of events.
+Analysing these data, we found out that
+tornadoes and heat are the severe weather event types by far most dangerous to people.
+Tornados, winds and floods are the most damaging events to the property and crops.
+Floods of all kinds are both dangerous to the people and produce
+a lot of damage to the property and crops.
 
 ## Prerequisites
 
-This report was produced using following software:
+This report was made using following software:
 
  - **R** version 3.2.3, 64bit, running under Windows operating system, taken from [R project](https://cran.r-project.org/bin/windows/base/).
  - **data.table** version 1.9.6 from [data table](https://cran.r-project.org/web/packages/data.table/index.html).
  - **ggplot2** as found in the **R** installation.
+ - **grid** as found in the **R** installation.
  - **xtable** as loaded from [there](https://cran.r-project.org/web/packages/xtable/index.html).
  - **R Studio** v0.99.489 from [R studio](https://www.rstudio.com/products/rstudio/download/).
  - **7 zip** v15.12, 64bit, from Igor Pavlov [page](http://www.7-zip.org/).
@@ -53,86 +55,95 @@ check_and_install <- function( packname ) {
 check_and_install("data.table")
 check_and_install("xtable")
 check_and_install("ggplot2")
+check_and_install("grid")
 
 require("data.table")
 require("xtable")
 require("ggplot2")
+require("grid")
 ```
 
 ### Download and Prepare Data
 
-First, we download all relevant data, including CSV table itself together with documentation and FAQ.
+We download all relevant data, including compressed data table itself together with documentation and FAQ.
 
 ```{r, echo=TRUE}
 
 fname.data <- "repdata-data-StormData.csv.bz2"
 url.data <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
-#download.file(url.data, destfile = fname.data, mode = "wb")
+download.file(url.data, destfile = fname.data, mode = "wb")
 
 fname.docs <- "repdata-data-StormDocs.pdf"
 url.docs <- "https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf"
-#download.file(url.docs, destfile = fname.docs, mode = "wb")
+download.file(url.docs, destfile = fname.docs, mode = "wb")
 
 fname.faq <- "repdata-data-StormFAQ.pdf"
 url.faq <- "https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf"
-#download.file(url.faq, destfile = fname.faq, mode = "wb")
+download.file(url.faq, destfile = fname.faq, mode = "wb")
 ```
 
-Storm database shall be uncompressed.
+We unpack the NOAA storm database.
 
 ```{r, echo=TRUE}
 # extractor from Igor Pavlov's 7zip
 sevenzip <- "\"C:/Program Files/7-Zip/7z.exe\""
 # always overwrite on extract
 cmd <- paste(sevenzip, " ", "x", " ", "-aoa", " ", fname.data)
-# try( system(cmd) )
+try( system(cmd) )
 ```
 
 ### Load data base
 
-The data file is now in the working directory, and in well-known CSV format.
-Read it directly as **data.table**, with some checks
+The data file is now in the working directory, and in the well-known CSV format.
+Read it directly as **data.table**.
 
 ```{r, echo=TRUE}
-# suppressMessages( sd <- fread("repdata-data-StormData.csv", showProgress = FALSE) )
-# str(sd)
+suppressMessages( sd <- fread("repdata-data-StormData.csv", showProgress = FALSE) )
+summary(sd)
 ```
 
 ### Data clean-up
 
-First, we would like to coerce *F* to *integer*.
+First, we coerce *F* to *integer*.
 
 ```{r, echo=TRUE}
-load("sd.rda")
-#sd <- sd[, F := as.integer(F)]
-str(sd)
+# speedy loading
+# load("sd.rda")
+sd <- sd[, F := as.integer(F)]
 ```
 
 Second, *BGN_DATE* to be converted to a proper *Date* class type.
 
 ```{r, echo=TRUE}
-#sd <- sd [, BGN_DATE := as.Date(BGN_DATE, format="%m/%d/%Y %H:%M:%S")]
-str(sd)
+sd <- sd [, BGN_DATE := as.Date(BGN_DATE, format="%m/%d/%Y %H:%M:%S")]
+summary(sd)
 ```
 
-### Years range restriction
+### Data quality versus year investigation
 
 We check how many events are per year total
 
-```{r, echo=TRUE}
+```{r plot.nof_events_per_year, echo=TRUE}
 sd <- sd[, Year := as.POSIXlt(BGN_DATE)$year + 1900]
-str(sd)
+#str(sd)
 sd.per_year <- sd[, .N, by = Year]
-str(sd.per_year)
-p <- ggplot(sd.per_year) + geom_line(aes(Year, N))
+#str(sd.per_year)
+p <- ggplot(sd.per_year) + geom_line(aes(Year, N)) +
+     ylab("Number of events recorded") +
+     xlab("Year")
 print(p)
 ```
+
+As one can see, number of stored events is growing as years pass by. That makes analysis
+somewhat complicated due to the fact that not all events would be on equal footing.
+
+After deliberation, we decided not to restrict our analysis by year range.
 
 ### Economy damage data adjustment
 
 Property damage and crop damage shall be converted into proper numerical form, based upon the
-codes described in the code book. Property and crop damages in original data table are expressed in the
-different scales using letter codes. Conversion rule is as following.
+codes described in the code book. Property and crop damages in original data table
+are expressed in the different scales using letter codes. Conversion rule is as following.
 
 - If PROPDMGEXP = B, then multiply PROPDMG by 1,000,000,000
 - If PROPDMGEXP = M, then multiply PROPDMG by 1,000,000
@@ -151,7 +162,7 @@ na.PROPDMGEXP <- sum(is.na(sd$PROPDMGEXP))
 So far we have `r na.PROPDMG` items with NA for property damage, and
 `r na.PROPDMGEXP` items with NA for property damage exponential letter code.
 
-Lets print the number of appearances of property damage codes in descending order.
+We print the number of appearances of property damage codes in descending order.
 
 ```{r, echo=TRUE}
 q <- setorder( sd[, .N, by = PROPDMGEXP], -N)
@@ -176,7 +187,7 @@ na.CROPDMGEXP <- sum(is.na(sd$CROPDMGEXP))
 So far we have `r na.CROPDMG` items with NA for crop damage, and
 `r na.CROPDMGEXP` items with NA for crop damage exponential letter code.
 
-Lets print the number of appearances of crop damage codes in descending order.
+We print the number of appearances of crop damage codes in descending order.
 
 ```{r, echo=TRUE}
 print( sum( is.na(sd$CROPDMGEXP) ) )
@@ -219,36 +230,344 @@ and crop damage as well
 sd <- sd[, CROPDMG := CROPDMG * damage_scale(CROPDMGEXP)]
 ```
 
-### Events grouping
+Finally, we add column to our data table which has the value equal to the total damage,
+expressed in US dollars.
 
 ```{r, echo=TRUE}
-q <- setorder( sd[, .N, by=sd$EVTYPE], -N )
-str(q)
+sd <- sd[, TOTALDMG := PROPDMG + CROPDMG]
+summary(sd)
 ```
 
-```{r, echo=TRUE}
-sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("TSTM WIND",
-                                      " TSTM WIND",
-                                      "SEVERE THUNDERSTORM WINDS",
-                                      "THUNDERSTORM WIND",
-                                      "THUNDERSTORM WINDS"), "TDSTM WINDS", EVTYPE )]
-```
+### Population Health data adjustment
+
+We adjust population health related data using very simple consideration.
+There are fatalities as well as injuries recorded in the data set. We will
+produce common measure of the population health severe events impact by
+making data column which combines fatalities weighted by factor of 5 plus
+injuries. Such measure will heavily bias fatalities versus injuries, which,
+we believe, is a right thing to do in our analysis. We will call it Population Health
+Damage index (PHDIDX).
 
 ```{r, echo=TRUE}
-sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("TSTM WIND",
-                                      " TSTM WIND",
-                                      "SEVERE THUNDERSTORM WINDS",
-                                      "THUNDERSTORM WIND",
-                                      "THUNDERSTORM WINDS"), "TDSTM WINDS", EVTYPE )]
+sd <- sd[, PHDIDX := INJURIES + 5*FATALITIES]
 ```
+
+### Events aggregation, property damage
+
+We have multiple event types for what is essentially same event. We merge manually several event types
+into single with consistent name. We generate such merges for the most significant event types.
+
+First, check number of distinctive event types
+
+```{r, echo=TRUE}
+sd.evts <- setorder( sd[, .N, by = .(EVTYPE)], -N )
+nof_evttypes <- nrow(sd.evts)
+str(sd.evts)
+print(sd.evts)
+```
+
+We have `r nof_evttypes` distinctive events, but a lot of them are low impact events.
+
+To print most relevant events with regards to the property damage
+
+```{r results="asis", echo=TRUE}
+sd.propdmg <- setorder( setnames( sd[ , sum(PROPDMG), by=EVTYPE], "V1", "TOTALDMG" ), -TOTALDMG)
+sd.propdmg.sel <- sd.propdmg[1:30]
+print(xtable(sd.propdmg.sel, digits = 0), type = "html", include.rownames = FALSE)
+```
+
+To check, for example, how many event types are related to hurricanes, search and grep
+anything in *EVTYPE* by a part of keyword
+
+```{r, echo=TRUE}
+q <- sd.evts[EVTYPE %like% "HURRI"]
+print.data.frame(q)
+```
+
+We merge all related events into single one by assigning common event type.
+For example, we mark as *HURRICANE* all hurricane and typhoon originated events.
 
 ```{r, echo=TRUE}
 sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("HURRICANE/TYPHOON",
                                               "HURRICANE EMILY",
-                                              "HURRICANE ERIN",
                                               "HURRICANE OPAL",
+                                              "HURRICANE ERIN",
+                                              "HURRICANE FELIX",
+                                              "HURRICANE GORDON",
                                               "HURRICANE OPAL/HIGH WINDS",
+                                              "HURRICANE-GENERATED SWELLS",
                                               "TYPHOON"), "HURRICANE", EVTYPE )]
 ```
 
+Following the established procedure, we combine all thunderstorm winds
+related events and mark them as one type of event.
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c(" TSTM WIND",
+                                              "TSTM WIND",
+                                              "TSTM WIND/HAIL",
+                                              "MARINE TSTM WIND",
+                                              "SEVERE THUNDERSTORM WINDS",
+                                              "THUNDERSTORM WIND",
+                                              "THUNDERSTORM WINDS",
+                                              "MARINE THUNDERSTORM WIND",
+                                              "THUNDERSTORM WINDSS",
+                                              "THUNDERSTORM WINDS HAIL",
+                                              "THUNDERSTORM WINDS/HAIL",
+                                              "THUNDERSTORM WINDS LIGHTNING",
+                                              "SEVERE THUNDERSTORM WINDS",
+                                              "GUSTY THUNDERSTORM WINDS",
+                                              "THUNDERSTORMS WINDS",
+                                              "THUNDERSTORM  WINDS",
+                                              "THUNDERSTORMS WIND",
+                                              "THUNDERSTORM  WINDS.",
+                                              "THUNDERSTORMW WINDS",
+                                              "THUNDERTORM WINDS",
+                                              "THUNDERSTORM WINDS.",
+                                              "THUNDERSTROM WINDS",
+                                              "THUNDERTSORM WIND",
+                                              "THUNDERSTORM WINDS/ HAIL",
+                                              "THUNDERSTORMW",
+                                              "THUNDERESTORM WINDS",
+                                              "THUNDERSTORMWINDS",
+                                              "THUNDERSTROM WIND",
+                                              "THUNDERSTORM W INDS",
+                                              "THUNDERSTORMW 50"
+                                               ), "THUNDERSTORM WIND", EVTYPE )]
+
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %like% "THUNDERSTORM WI", "THUNDERSTORM WINDS", EVTYPE )]
+```
+
+Aggregate all relevant heavy wind related events into *HEAVY RAIN* event type.
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("HEAVY RAIN",
+                                              "HEAVY RAINS",
+                                              "HEAVY RAIN/WIND",
+                                              "HEAVY RAINFALL",
+                                              "TSTM HEAVY RAIN",
+                                              "UNSEASONAL RAIN",
+                                              "EXCESSIVE RAINFALL",
+                                              "HEAVY RAIN/SEVERE WEATHER"
+                                               ), "HEAVY RAIN", EVTYPE )]
+```
+
+Aggregate all relevant flash flood related events into *FLASH FLOOD* event type.
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("FLASH FLOODING",
+                                              "FLASH FLOOD/FLOOD",
+                                              "FLOOD/FLASH FLOOD"
+                                               ), "FLASH FLOOD", EVTYPE )]
+```
+
+Similar aggregation wrt the *URBAN FLOOD* event type.
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("URBAN FLOODING",
+                                              "FLOODING",
+                                              "URBAN FLOOD",
+                                              "URBAN/SML STREAM FLD"
+                                               ), "URBAN FLOOD", EVTYPE )]
+```
+
+Flooding aggregation
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("FLOOD",
+                                              "FLOODING",
+                                               "MAJOR FLOOD"
+                                               ), "FLOOD", EVTYPE )]
+```
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("RIVER FLOODING",
+                                               "RIVER FLOOD"
+                                               ), "RIVER FLOOD", EVTYPE )]
+```
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %like% "COASTAL FL",
+                       "COASTAL FLOOD", EVTYPE )]
+
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %like% "COASTAL  FL",
+                       "COASTAL FLOOD", EVTYPE )]
+
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %like% "CSTL FL",
+                       "COASTAL FLOOD", EVTYPE )]
+```
+
+Similar aggregation wrt the *HIGH WIND* event type.
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("HIGH WIND",
+                                              "STRONG WIND",
+                                              "BLOWING WIND",
+                                              "HIGH WINDS",
+                                              "STRONG WINDS",
+                                              "STRONG WIND"
+                                               ), "HIGH WIND", EVTYPE )]
+```
+
+Fog aggregation
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("FOG",
+                                              "DENSE FOG"
+                                               ), "FOG", EVTYPE )]
+```
+
+Hail aggregation
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("HAIL",
+                                              "SMALL HAIL"
+                                               ), "HAIL", EVTYPE )]
+```
+
+All tropical storms aggregated together
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %like% "TROPICAL STORM",
+                       "TROPICAL STORM", EVTYPE )]
+```
+
+Snow events aggregation
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("LIGHT SNOW",
+                                              "LAKE-EFFECT SNOW",
+                                              "LAKE EFFECT SNOW",
+                                              "SNOW",
+                                              "MODERATE SNOWFALL",
+                                              "RECORD SNOW",
+                                              "RECORD SNOWFALL",
+                                              "HEAVY SNOW SQUALLS",
+                                              "HEAVY LAKE SNOW",
+                                              "EXCESSIVE SNOW"
+                                               ), "SNOW", EVTYPE )]
+```
+
+After aggregation, we print forty most damaging events in the table below.
+
+```{r results="asis", echo=TRUE}
+sd.propdmg <- setorder( setnames( sd[ , sum(PROPDMG), by=EVTYPE], "V1", "TOTALDMG" ), -TOTALDMG)
+sd.propdmg.sel <- sd.propdmg[1:40]
+print(xtable(sd.propdmg.sel, digits = 0), type = "html", include.rownames = FALSE)
+```
+
+### Events aggregation, population health damage
+
+```{r results="asis", echo=TRUE}
+sd.pubhdmg <- setorder( setnames( sd[ , sum(PHDIDX), by=EVTYPE], "V1", "PHDIDX" ), -PHDIDX)
+sd.pubhdmg.sel <- sd.pubhdmg[1:40]
+print(xtable(sd.pubhdmg.sel, digits = 0), type = "html", include.rownames = FALSE)
+```
+
+We aggregate events related to public health as well
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("EXCESSIVE HEAT",
+                                              "HEAT WAVE",
+                                              "RECORD/EXCESSIVE HEAT",
+                                              "EXTREME HEAT",
+                                              "UNSEASONABLY WARM",
+                                              "RECORD HEAT"
+                                             ), "HEAT", EVTYPE )]
+```
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("EXTREME COLD",
+                                              "FROST/FREEZE",
+                                              "FROST",
+                                              "DAMAGING FREEZE",
+                                              "RECORD COLD",
+                                              "COLD/WIND CHILL",
+                                              "EXTREME COLD/WIND CHILL",
+                                              "UNSEASONABLY COLD",
+                                              "HARD FREEZE",
+                                              "FREEZE"
+                                             ), "COLD", EVTYPE )]
+```
+
+```{r, echo=TRUE}
+sd[, EVTYPE := ifelse( toupper(EVTYPE) %in% c("WINTER STORMS",
+                                              "WINTER STORM"
+                                             ), "WINTER STORM", EVTYPE )]
+```
+
 ## Results
+
+When we analyze the data, we look at total numbers in aggregate.
+We don't use an yearly averages due to the fact that
+there are many unique events that happen only once
+every few years, for example named hurricanes and tropical storms.
+
+### Population Health effects caused by Severe Weather Events
+
+We look at the number of people killed or injured per event type,
+adjusted as described in public health index.
+
+For the 40 most dangerous event types:
+
+```{r plot.pop.health.damage, echo=TRUE}
+sd.pubhdmg <- setorder( setnames( sd[ , sum(PHDIDX), by=EVTYPE], "V1", "PHDIDX" ), -PHDIDX)
+sd.pubhdmg.sel <- sd.pubhdmg[1:40]
+
+plt.phdidx <- ggplot(data=sd.pubhdmg.sel, aes(x = EVTYPE, y = PHDIDX)) +
+              theme(plot.margin = unit(c(1,1,-0.2,.91), "cm")) +
+              geom_bar(stat="identity") +
+              ylab("Population Health Damage Index (5*K+I)")
+
+plt.phdidx <- plt.phdidx + theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+              xlab("")
+
+print(plt.phdidx)
+```
+
+And same data are printed in the tabular form
+
+```{r results="asis", echo=TRUE}
+print(xtable(sd.pubhdmg.sel[1:30], digits = 0), type = "html", include.rownames = FALSE)
+```
+
+We can see from the graph and the table that certain event types are
+extremely dangerous to the health of the population, most notably being tornadoes and heat.
+
+### Property and Crop damage caused by Severe Weather Events
+
+We now look at total property and crop damage per event type, for the top most costly event types.
+
+```{r plot.property.crop.damage, echo=TRUE}
+sd.propdmg <- setorder( setnames( sd[ , sum(PROPDMG), by=EVTYPE], "V1", "TOTALDMG" ), -TOTALDMG)
+sd.propdmg.sel <- sd.propdmg.sel[1:40]
+
+plt.totdmg <- ggplot(data=sd.propdmg.sel, aes(x=EVTYPE, y=TOTALDMG)) +
+  theme(plot.margin=unit(c(1,1,-0.2,.82), "cm")) +
+  geom_bar(stat="identity") +
+  ylab("Property and Crop Damage (USD)")
+
+plt.totdmg <- plt.totdmg +
+              theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+              xlab("")
+
+print(plt.totdmg)
+```
+
+And data are presented as table as well.
+
+```{r results="asis", echo=TRUE}
+print(xtable(sd.propdmg.sel[1:30], digits = 0), type = "html", include.rownames = FALSE)
+```
+
+As with dangerous to the human event types,
+from the graph and table we can see that certain event
+types are extremely costly to the economy.
+
+Heaviest damages are caused by tornados, winds and floods.
+
+## Conclusion
+
+Using **R**, we investigated what kind of severe weather events caused most damage to population
+health and the economy. We propose to work with business, goverment and communities to prevent
+and alleviate the effects of such events.

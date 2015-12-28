@@ -31,3 +31,5 @@ vignettes/*.pdf
 
 # Temporary files after knittr run
 *.html
+*.png
+*.md
